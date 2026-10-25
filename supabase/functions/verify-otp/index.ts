@@ -110,7 +110,7 @@ serve(async (req: Request) => {
     let userId: string;
     const { data: existingUsers } = await supabase.auth.admin.listUsers();
     const existingUser = existingUsers?.users?.find(
-      (u) => u.email?.toLowerCase() === sanitizedEmail
+      (u: { email?: string; id: string }) => u.email?.toLowerCase() === sanitizedEmail
     );
 
     if (existingUser) {
