@@ -4,7 +4,7 @@ Aplikasi komunikasi pribadi berbasis Flutter yang menggabungkan chat terenkripsi
 
 ## Status
 
-Tahap pengembangan. Lihat [PRD](docs/PRD_v0.3.md) untuk ruang lingkup dan [DESIGN](docs/DESIGN.md) untuk panduan visual.
+Tahap pengembangan. Lihat [PRD](PRD_v0.3.md) untuk ruang lingkup dan [DESIGN](DESIGN.md) untuk panduan visual.
 
 ## Teknologi
 
