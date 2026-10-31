@@ -1,19 +1,55 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../domain/repositories/auth_repository.dart';
+import '../../../../core/config/app_config.dart';
 import '../../data/repositories/mock_auth_repository.dart';
+import '../../data/repositories/supabase_auth_repository.dart';
+import '../../domain/repositories/auth_repository.dart';
 import 'auth_state.dart';
 
 /// Provider repository autentikasi.
-/// Default menggunakan MockAuthRepository untuk pengujian lokal terisolasi sesuai instruksi pemilik produk.
+/// Otomatis memilih MockAuthRepository saat testing/dev, dan SupabaseAuthRepository di mode live.
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return MockAuthRepository();
+  if (AppConfig.useMock) {
+    return MockAuthRepository();
+  }
+  return SupabaseAuthRepository();
 });
 
 /// Controller StateNotifier Riverpod untuk mengelola alur autentikasi FR-01 sampai FR-05.
 class AuthController extends StateNotifier<AuthState> {
   final AuthRepository _repository;
 
-  AuthController(this._repository) : super(const AuthState());
+  AuthController(this._repository) : super(const AuthState(status: AuthStatus.loading)) {
+    _checkInitialSession();
+  }
+
+  /// Memeriksa sesi login tersimpan secara otomatis (Auto-login / Sesi Persisten).
+  /// Pengguna yang sudah pernah login TIDAK PERLU meminta OTP lagi setiap kali membuka aplikasi.
+  Future<void> _checkInitialSession() async {
+    try {
+      final profile = await _repository.getCurrentProfile();
+      if (profile != null) {
+        if (profile.username == null || profile.birthDate == null) {
+          state = state.copyWith(
+            status: AuthStatus.needsProfileCompletion,
+            email: profile.email,
+            userProfile: profile,
+            errorMessage: null,
+          );
+        } else {
+          state = state.copyWith(
+            status: AuthStatus.authenticated,
+            userProfile: profile,
+            email: profile.email,
+            errorMessage: null,
+          );
+        }
+      } else {
+        state = state.copyWith(status: AuthStatus.initial, errorMessage: null);
+      }
+    } catch (_) {
+      state = state.copyWith(status: AuthStatus.initial, errorMessage: null);
+    }
+  }
 
   /// Mengirim kode OTP ke email (FR-01, FR-02)
   Future<bool> sendOtp(String email) async {

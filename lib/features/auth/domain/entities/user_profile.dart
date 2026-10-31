@@ -5,7 +5,7 @@ class UserProfile {
   final String? username;
   final String? displayName;
   final String? avatarUrl;
-  final DateTime birthDate;
+  final DateTime? birthDate;
   final bool isAdult;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -16,7 +16,7 @@ class UserProfile {
     this.username,
     this.displayName,
     this.avatarUrl,
-    required this.birthDate,
+    this.birthDate,
     required this.isAdult,
     this.createdAt,
     this.updatedAt,
@@ -37,17 +37,19 @@ class UserProfile {
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
       id: json['id'] as String,
-      email: json['email'] as String,
+      email: json['email'] as String? ?? '',
       username: json['username'] as String?,
       displayName: json['display_name'] as String?,
       avatarUrl: json['avatar_url'] as String?,
-      birthDate: DateTime.parse(json['birth_date'] as String),
+      birthDate: json['birth_date'] != null
+          ? DateTime.tryParse(json['birth_date'] as String)
+          : null,
       isAdult: json['is_adult'] as bool? ?? false,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.tryParse(json['created_at'] as String)
           : null,
       updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
+          ? DateTime.tryParse(json['updated_at'] as String)
           : null,
     );
   }
@@ -59,7 +61,7 @@ class UserProfile {
       'username': username,
       'display_name': displayName,
       'avatar_url': avatarUrl,
-      'birth_date': birthDate.toIso8601String().split('T').first,
+      'birth_date': birthDate?.toIso8601String().split('T').first,
       'is_adult': isAdult,
     };
   }

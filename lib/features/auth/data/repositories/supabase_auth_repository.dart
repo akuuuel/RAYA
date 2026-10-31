@@ -3,7 +3,7 @@ import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 /// Implementasi AuthRepository yang menghubungkan aplikasi klien ke Supabase.
-/// Memanggil Edge Function untuk OTP dan tabel `profiles` via RLS.
+/// Menggunakan Supabase Auth bawaan (Email OTP) — tidak memerlukan Resend atau Edge Function.
 class SupabaseAuthRepository implements AuthRepository {
   final SupabaseClient _client;
 
@@ -17,24 +17,19 @@ class SupabaseAuthRepository implements AuthRepository {
     });
   }
 
+  /// Mengirim OTP ke email menggunakan Supabase Auth bawaan.
   @override
   Future<void> requestEmailOtp(String email) async {
     final sanitizedEmail = email.trim().toLowerCase();
 
-    final response = await _client.functions.invoke(
-      'request-otp',
-      body: {'email': sanitizedEmail},
+    await _client.auth.signInWithOtp(
+      email: sanitizedEmail,
+      shouldCreateUser: true,
     );
-
-    if (response.status != 200) {
-      final data = response.data;
-      final message = (data is Map && data['message'] != null)
-          ? data['message'] as String
-          : 'Gagal mengirim kode OTP. Silakan coba beberapa saat lagi.';
-      throw Exception(message);
-    }
   }
 
+  /// Memverifikasi OTP yang dikirim oleh Supabase Auth.
+  /// Menangani fallback OtpType (email, signup, magiclink) untuk pengguna baru & lama.
   @override
   Future<AuthResult> verifyEmailOtp({
     required String email,
@@ -43,37 +38,55 @@ class SupabaseAuthRepository implements AuthRepository {
     final sanitizedEmail = email.trim().toLowerCase();
     final sanitizedOtp = otp.trim();
 
-    final response = await _client.functions.invoke(
-      'verify-otp',
-      body: {
-        'email': sanitizedEmail,
-        'otp': sanitizedOtp,
-      },
-    );
-
-    final data = response.data;
-    if (response.status != 200 || (data is Map && data['success'] != true)) {
-      final message = (data is Map && data['message'] != null)
-          ? data['message'] as String
-          : 'Verifikasi OTP gagal. Silakan coba lagi.';
-      throw Exception(message);
-    }
-
-    final userId = data['userId'] as String;
-    final isNewUser = data['isNewUser'] as bool? ?? false;
-    final isAdult = data['isAdult'] as bool? ?? false;
-
-    // Jika hashedToken tersedia, set session auth
-    final hashedToken = data['hashedToken'] as String?;
-    if (hashedToken != null) {
-      await _client.auth.verifyOTP(
-        type: OtpType.magiclink,
-        tokenHash: hashedToken,
+    AuthResponse response;
+    try {
+      response = await _client.auth.verifyOTP(
+        email: sanitizedEmail,
+        token: sanitizedOtp,
+        type: OtpType.email,
       );
+    } on AuthException {
+      try {
+        // Untuk pengguna baru yang belum terdaftar di auth.users, Supabase memakai token 'signup'
+        response = await _client.auth.verifyOTP(
+          email: sanitizedEmail,
+          token: sanitizedOtp,
+          type: OtpType.signup,
+        );
+      } on AuthException {
+        try {
+          response = await _client.auth.verifyOTP(
+            email: sanitizedEmail,
+            token: sanitizedOtp,
+            type: OtpType.magiclink,
+          );
+        } on AuthException catch (e) {
+          throw Exception(e.message);
+        }
+      }
     }
+
+    final session = response.session;
+    final user = response.user;
+
+    if (session == null || user == null) {
+      throw Exception('Kode OTP tidak valid atau sudah kedaluwarsa. Silakan coba lagi.');
+    }
+
+    // Cek apakah profil sudah lengkap (username & birth_date wajib sudah diisi)
+    final existingProfile = await _client
+        .from('profiles')
+        .select('id, username, birth_date, is_adult')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    final isNewUser = existingProfile == null ||
+        existingProfile['username'] == null ||
+        existingProfile['birth_date'] == null;
+    final isAdult = (existingProfile?['is_adult'] as bool?) ?? false;
 
     return AuthResult(
-      userId: userId,
+      userId: user.id,
       email: sanitizedEmail,
       isNewUser: isNewUser,
       isAdult: isAdult,
@@ -95,10 +108,7 @@ class SupabaseAuthRepository implements AuthRepository {
     final sanitizedUsername = username.trim().toLowerCase();
     final dateStr = birthDate.toIso8601String().split('T').first;
 
-    // Simpan ke tabel profiles (is_adult akan diverifikasi oleh trigger server)
-    final profileData = {
-      'id': user.id,
-      'email': user.email ?? '',
+    final updateData = {
       'username': sanitizedUsername,
       'display_name': displayName.trim(),
       'avatar_url': avatarUrl,
@@ -106,9 +116,28 @@ class SupabaseAuthRepository implements AuthRepository {
       'updated_at': DateTime.now().toIso8601String(),
     };
 
+    // Update row profil yang sudah dibuat oleh database trigger
+    final updated = await _client
+        .from('profiles')
+        .update(updateData)
+        .eq('id', user.id)
+        .select()
+        .maybeSingle();
+
+    if (updated != null) {
+      return UserProfile.fromJson(updated);
+    }
+
+    // Fallback upsert jika baris profil belum pernah dibuat
+    final fullData = {
+      'id': user.id,
+      'email': user.email ?? '',
+      ...updateData,
+    };
+
     final response = await _client
         .from('profiles')
-        .upsert(profileData)
+        .upsert(fullData)
         .select()
         .single();
 

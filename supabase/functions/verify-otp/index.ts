@@ -123,8 +123,9 @@ serve(async (req: Request) => {
       if (createError || !newUser?.user) {
         throw createError ?? new Error("Gagal membuat akun pengguna.");
       }
-      userId = newUser.user.id;
+      userId = newUser.user.id; 
     }
+  
 
     // Cek apakah profil sudah dilengkapi (nama, username, tanggal lahir)
     const { data: profile } = await supabase
@@ -165,3 +166,4 @@ serve(async (req: Request) => {
     );
   }
 });
+

@@ -25,7 +25,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   String _enteredCode = '';
 
   Future<void> _handleVerify() async {
-    if (_enteredCode.length < 6) return;
+    if (_enteredCode.length < 8) return;
 
     final success = await ref.read(authControllerProvider.notifier).verifyOtp(_enteredCode);
     if (!mounted) return;
@@ -103,15 +103,15 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
               ),
               const SizedBox(height: AppSpacing.s8),
               Text(
-                'Kode verifikasi 6 digit telah dikirim ke:\n${widget.email}',
+                'Kode verifikasi 8 digit telah dikirim ke:\n${widget.email}',
                 style: AppTextStyles.bodyMedium(color: AppColors.textSecondary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.s32),
 
-              // Komponen 6 Kotak OTP
+              // Komponen 8 Kotak OTP
               OtpInput(
-                length: 6,
+                length: 8,
                 errorText: authState.errorMessage,
                 onChanged: (code) {
                   setState(() => _enteredCode = code);
@@ -130,7 +130,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
               PrimaryButton(
                 text: 'Verifikasi',
                 isLoading: authState.isLoading,
-                isEnabled: _enteredCode.length == 6,
+                isEnabled: _enteredCode.length == 8,
                 onPressed: _handleVerify,
                 semanticsLabel: 'Tombol verifikasi kode OTP',
               ),

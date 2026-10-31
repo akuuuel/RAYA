@@ -9,7 +9,12 @@ import '../controllers/auth_controller.dart';
 import 'otp_verification_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  final bool isLoginMode;
+
+  const LoginScreen({
+    super.key,
+    this.isLoginMode = false,
+  });
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -17,7 +22,14 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
+  late bool _isLogin;
   String? _localError;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLogin = widget.isLoginMode;
+  }
 
   @override
   void dispose() {
@@ -90,12 +102,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 children: [
                   const SizedBox(height: AppSpacing.s16),
                   Text(
-                    'Masuk dengan Email',
+                    _isLogin ? 'Masuk ke Akun' : 'Daftar Akun Baru',
                     style: AppTextStyles.headlineMedium(color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: AppSpacing.s8),
                   Text(
-                    'Masukkan alamat email Anda untuk menerima kode OTP 6 digit verifikasi.',
+                    _isLogin
+                        ? 'Masukkan alamat email akun terdaftar Anda untuk menerima kode OTP verifikasi.'
+                        : 'Masukkan alamat email Anda untuk menerima kode OTP 8 digit verifikasi.',
                     style: AppTextStyles.bodyMedium(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: AppSpacing.s32),
@@ -121,12 +135,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const Spacer(),
 
                   PrimaryButton(
-                    text: 'Kirim Kode',
+                    text: _isLogin ? 'Masuk' : 'Daftar',
                     isLoading: authState.isLoading,
                     onPressed: _handleSendOtp,
-                    semanticsLabel: 'Tombol kirim kode OTP ke email',
+                    semanticsLabel: _isLogin ? 'Tombol masuk akun' : 'Tombol daftar akun baru',
                   ),
-                  const SizedBox(height: AppSpacing.s24),
+                  const SizedBox(height: AppSpacing.s16),
+
+                  // Opsi peralihan Masuk <-> Daftar
+                  Center(
+                    child: TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _isLogin = !_isLogin;
+                          _localError = null;
+                        });
+                        ref.read(authControllerProvider.notifier).clearError();
+                      },
+                      child: Text(
+                        _isLogin
+                            ? 'Belum punya akun? Daftar sekarang'
+                            : 'Sudah punya akun? Masuk',
+                        style: AppTextStyles.bodyMedium(color: AppColors.primaryGlow),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.s16),
                 ],
               ),
             ),

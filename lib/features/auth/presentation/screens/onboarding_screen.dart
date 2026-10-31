@@ -44,13 +44,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      _goToLogin();
+      _goToLogin(isLoginMode: false);
     }
   }
 
-  void _goToLogin() {
+  void _goToLogin({bool isLoginMode = false}) {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      MaterialPageRoute(builder: (_) => LoginScreen(isLoginMode: isLoginMode)),
     );
   }
 
@@ -193,7 +193,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     SizedBox(
                       height: AppSpacing.minTouchTarget,
                       child: TextButton(
-                        onPressed: _goToLogin,
+                        onPressed: () => _goToLogin(isLoginMode: false),
                         child: Text(
                           'Lewati',
                           style: AppTextStyles.bodyMedium(
@@ -203,7 +203,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     )
                   else
-                    const SizedBox(height: AppSpacing.minTouchTarget),
+                    SizedBox(
+                      height: AppSpacing.minTouchTarget,
+                      child: TextButton(
+                        onPressed: () => _goToLogin(isLoginMode: true),
+                        child: Text(
+                          'Sudah punya akun? Masuk',
+                          style: AppTextStyles.bodyMedium(
+                            color: AppColors.primaryGlow,
+                          ),
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: AppSpacing.s16),
                 ],
               ),
