@@ -82,15 +82,62 @@ class SupabaseContactRepository implements ContactRepository {
       throw Exception('Anda tidak dapat menambahkan akun sendiri.');
     }
 
-    final res = await _client.from('contact_requests').insert({
+    // 1. Cek apakah sudah berteman di tabel contacts
+    final existingContact = await _client
+        .from('contacts')
+        .select('id')
+        .eq('user_id', _currentUserId)
+        .eq('contact_user_id', targetUserId)
+        .maybeSingle();
+
+    if (existingContact != null) {
+      throw Exception('Pengguna ini sudah menjadi kontak Anda.');
+    }
+
+    // 2. Cek apakah ada permintaan pertemanan dari arah sebaliknya yang masih pending
+    final reverseReq = await _client
+        .from('contact_requests')
+        .select('id, status')
+        .eq('sender_id', targetUserId)
+        .eq('receiver_id', _currentUserId)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+    if (reverseReq != null) {
+      await acceptContactRequest(reverseReq['id'] as String);
+      return;
+    }
+
+    // 3. Cek apakah sudah pernah ada permintaan dari saya ke target
+    final existingReq = await _client
+        .from('contact_requests')
+        .select('id, status')
+        .eq('sender_id', _currentUserId)
+        .eq('receiver_id', targetUserId)
+        .maybeSingle();
+
+    if (existingReq != null) {
+      final status = existingReq['status'] as String;
+      if (status == 'pending') {
+        throw Exception('Permintaan pertemanan sudah dikirim sebelumnya dan sedang menunggu konfirmasi.');
+      } else if (status == 'accepted') {
+        throw Exception('Pengguna ini sudah menjadi kontak Anda.');
+      } else {
+        // Status sebelumnya rejected / cancelled: hidupkan kembali menjadi pending
+        await _client.from('contact_requests').update({
+          'status': 'pending',
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', existingReq['id']);
+        return;
+      }
+    }
+
+    // 4. Jika baru pertama kali, buat baris baru
+    await _client.from('contact_requests').insert({
       'sender_id': _currentUserId,
       'receiver_id': targetUserId,
       'status': 'pending',
     });
-
-    if (res != null && res.error != null) {
-      throw Exception(res.error!.message);
-    }
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../auth/domain/entities/user_profile.dart';
 import '../../../../core/crypto/crypto_service.dart';
+import '../../../../core/crypto/key_storage_service.dart';
 import '../../domain/entities/conversation.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/repositories/chat_repository.dart';
@@ -8,7 +9,6 @@ import '../../domain/repositories/chat_repository.dart';
 /// Implementasi ChatRepository dengan Supabase Realtime dan E2EE CryptoService.
 class SupabaseChatRepository implements ChatRepository {
   final SupabaseClient _client;
-  String? _cachedPrivateKey;
 
   SupabaseChatRepository({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
@@ -23,44 +23,32 @@ class SupabaseChatRepository implements ChatRepository {
 
   @override
   Future<String> getOrGenerateMyPrivateKey() async {
-    if (_cachedPrivateKey != null) return _cachedPrivateKey!;
+    // Ambil atau buat kunci privat yang tersimpan persisten di perangkat (FR-09)
+    final keys = await KeyStorageService.getOrGenerateKeyPair();
 
-    // Buat pasangan kunci baru jika belum ada
-    final keys = CryptoService.generateKeyPair();
-    _cachedPrivateKey = keys['privateKey']!;
-
-    // Simpan kunci publik ke database
+    // Pastikan kunci publik sinkron ke server
     await _client.from('user_keys').upsert({
       'user_id': _currentUserId,
       'public_key': keys['publicKey']!,
       'updated_at': DateTime.now().toIso8601String(),
     });
 
-    return _cachedPrivateKey!;
+    return keys['privateKey']!;
   }
 
   @override
   Future<String> getOrPublishMyPublicKey() async {
-    final res = await _client
-        .from('user_keys')
-        .select('public_key')
-        .eq('user_id', _currentUserId)
-        .maybeSingle();
+    // Ambil kunci publik dari penyimpanan lokal yang persisten
+    final localPublicKey = await KeyStorageService.getPublicKey();
 
-    if (res != null && res['public_key'] != null) {
-      return res['public_key'] as String;
-    }
-
-    final keys = CryptoService.generateKeyPair();
-    _cachedPrivateKey = keys['privateKey']!;
-
+    // Pastikan kunci publik di server selalu sinkron dengan kunci lokal
     await _client.from('user_keys').upsert({
       'user_id': _currentUserId,
-      'public_key': keys['publicKey']!,
+      'public_key': localPublicKey,
       'updated_at': DateTime.now().toIso8601String(),
     });
 
-    return keys['publicKey']!;
+    return localPublicKey;
   }
 
   @override
@@ -77,22 +65,142 @@ class SupabaseChatRepository implements ChatRepository {
 
   @override
   Future<List<Conversation>> getConversations() async {
+    // Otomatis tandai pesan masuk berstatus 'sent' menjadi 'delivered' karena perangkat pengguna aktif menerima
+    try {
+      await _client
+          .from('messages')
+          .update({'status': 'delivered'})
+          .eq('recipient_id', _currentUserId)
+          .eq('status', 'sent');
+    } catch (_) {}
+
     final res = await _client
         .from('conversations')
         .select('id, participant_a, participant_b, last_message_at, p_a:profiles!conversations_participant_a_fkey(*), p_b:profiles!conversations_participant_b_fkey(*)')
         .or('participant_a.eq.$_currentUserId,participant_b.eq.$_currentUserId')
         .order('last_message_at', ascending: false);
 
+    // Ambil kunci privat saya dan semua kunci publik pengguna untuk mendekripsi pesan terakhir secara instan
+    String? myPrivateKey;
+    final Map<String, String> publicKeysMap = {};
+    try {
+      myPrivateKey = await getOrGenerateMyPrivateKey();
+      final keysRes = await _client.from('user_keys').select('user_id, public_key');
+      for (final row in (keysRes as List)) {
+        final uid = row['user_id'] as String?;
+        final pkey = row['public_key'] as String?;
+        if (uid != null && pkey != null) {
+          publicKeysMap[uid] = pkey;
+        }
+      }
+    } catch (_) {}
+
     final List<Conversation> list = [];
     for (final json in (res as List)) {
       final pA = UserProfile.fromJson(json['p_a'] as Map<String, dynamic>);
       final pB = UserProfile.fromJson(json['p_b'] as Map<String, dynamic>);
       final otherUser = pA.id == _currentUserId ? pB : pA;
+      final convId = json['id'] as String;
+
+      // Ambil pesan terakhir
+      Message? lastMessage;
+      int unreadCount = 0;
+      try {
+        final msgRes = await _client
+            .from('messages')
+            .select()
+            .eq('conversation_id', convId)
+            .eq('deleted_for_all', false)
+            .order('created_at', ascending: false)
+            .limit(1);
+        if ((msgRes as List).isNotEmpty) {
+          final msgJson = msgRes.first as Map<String, dynamic>;
+          final isOutgoing = msgJson['sender_id'] == _currentUserId;
+          final ciphertext = msgJson['ciphertext'] as String? ?? '';
+          final nonce = msgJson['nonce'] as String? ?? '';
+          final msgType = MessageType.values.firstWhere(
+            (e) => e.name == msgJson['message_type'],
+            orElse: () => MessageType.text,
+          );
+
+          // Dekripsi isi pesan terakhir agar dapat ditampilkan langsung di bawah nama kontak
+          String plaintext = '';
+          final peerPublicKey = publicKeysMap[otherUser.id];
+          if (myPrivateKey != null && peerPublicKey != null && ciphertext.isNotEmpty && nonce.isNotEmpty) {
+            try {
+              plaintext = CryptoService.decrypt(
+                ciphertext: ciphertext,
+                nonce: nonce,
+                recipientPrivateKey: myPrivateKey,
+                senderPublicKey: peerPublicKey,
+              );
+            } catch (_) {
+              plaintext = '';
+            }
+          }
+
+          String displayContent = 'Pesan baru';
+          if (plaintext.isNotEmpty) {
+            if (plaintext.startsWith('IMAGE:')) {
+              final raw = plaintext.substring(6);
+              final caption = raw.contains('||') ? raw.split('||').sublist(1).join('||').trim() : '';
+              displayContent = caption.isNotEmpty ? '📷 $caption' : '📷 Foto';
+            } else if (plaintext.startsWith('FILE:')) {
+              final parts = plaintext.substring(5).split('||');
+              final filename = parts.isNotEmpty ? parts[0] : 'Dokumen';
+              displayContent = '📎 $filename';
+            } else if (plaintext.startsWith('AUDIO:')) {
+              final parts = plaintext.substring(6).split('||');
+              final dur = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : '';
+              displayContent = dur.isNotEmpty ? '🎙️ Pesan Suara · $dur' : '🎙️ Pesan Suara';
+            } else {
+              displayContent = plaintext;
+            }
+          } else {
+            if (msgType == MessageType.image) {
+              displayContent = '📷 Foto';
+            } else if (msgType == MessageType.voice) {
+              displayContent = '🎙️ Pesan Suara';
+            } else {
+              displayContent = isOutgoing ? 'Pesan terkirim' : 'Pesan masuk';
+            }
+          }
+
+          lastMessage = Message(
+            id: msgJson['id'] as String,
+            conversationId: convId,
+            senderId: msgJson['sender_id'] as String,
+            recipientId: msgJson['recipient_id'] as String,
+            content: displayContent,
+            ciphertext: ciphertext,
+            nonce: nonce,
+            messageType: msgType,
+            status: MessageStatus.values.firstWhere(
+              (e) => e.name == msgJson['status'],
+              orElse: () => MessageStatus.sent,
+            ),
+            createdAt: DateTime.parse(msgJson['created_at'] as String),
+            isOutgoing: isOutgoing,
+          );
+        }
+
+        // Hitung unread
+        final unreadRes = await _client
+            .from('messages')
+            .select('id')
+            .eq('conversation_id', convId)
+            .eq('recipient_id', _currentUserId)
+            .neq('status', 'read')
+            .eq('deleted_for_all', false);
+        unreadCount = (unreadRes as List).length;
+      } catch (_) {}
 
       list.add(
         Conversation(
-          id: json['id'] as String,
+          id: convId,
           otherUser: otherUser,
+          lastMessage: lastMessage,
+          unreadCount: unreadCount,
           lastMessageAt: DateTime.parse(json['last_message_at'] as String),
         ),
       );
@@ -180,6 +288,10 @@ class SupabaseChatRepository implements ChatRepository {
             (e) => e.name == json['status'],
             orElse: () => MessageStatus.sent,
           ),
+          messageType: MessageType.values.firstWhere(
+            (e) => e.name == json['message_type'],
+            orElse: () => MessageType.text,
+          ),
           createdAt: DateTime.parse(json['created_at'] as String),
           isOutgoing: isOutgoing,
           deletedForAll: deletedForAll,
@@ -195,10 +307,11 @@ class SupabaseChatRepository implements ChatRepository {
     required String recipientId,
     required String text,
     required String recipientPublicKey,
+    MessageType messageType = MessageType.text,
   }) async {
     final myPrivateKey = await getOrGenerateMyPrivateKey();
 
-    // 1. Enkripsi pesan teks di perangkat (FR-10)
+    // 1. Enkripsi pesan (teks/gambar/suara) di perangkat (FR-10)
     final encrypted = CryptoService.encrypt(
       plaintext: text,
       senderPrivateKey: myPrivateKey,
@@ -214,7 +327,7 @@ class SupabaseChatRepository implements ChatRepository {
           'recipient_id': recipientId,
           'ciphertext': encrypted['ciphertext']!,
           'nonce': encrypted['nonce']!,
-          'message_type': 'text',
+          'message_type': messageType.name,
           'status': 'sent',
         })
         .select()
@@ -228,10 +341,21 @@ class SupabaseChatRepository implements ChatRepository {
       content: text,
       ciphertext: encrypted['ciphertext']!,
       nonce: encrypted['nonce']!,
+      messageType: messageType,
       status: MessageStatus.sent,
       createdAt: DateTime.parse(res['created_at'] as String),
       isOutgoing: true,
     );
+  }
+
+  @override
+  Future<void> markMessagesAsDelivered(String conversationId) async {
+    await _client
+        .from('messages')
+        .update({'status': 'delivered'})
+        .eq('conversation_id', conversationId)
+        .eq('recipient_id', _currentUserId)
+        .eq('status', 'sent');
   }
 
   @override

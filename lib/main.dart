@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/config/app_config.dart';
+import 'core/services/notification_service.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_spacing.dart';
 import 'core/theme/app_text_styles.dart';
@@ -26,6 +27,9 @@ Future<void> main() async {
       anonKey: AppConfig.supabaseAnonKey,
     );
   }
+
+  // Inisialisasi Layanan Notifikasi Sistem & Suara HP
+  await NotificationService.instance.initialize();
 
   runApp(
     const ProviderScope(
@@ -88,34 +92,24 @@ class SplashScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Spacer(),
-              // Efek Glow / Brand RAYA
+              // Logo Utama RAYA dengan efek glow
               Container(
-                width: 96,
-                height: 96,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(32),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primaryGlow.withValues(alpha: 0.35),
-                      blurRadius: 32,
-                      spreadRadius: 4,
+                      color: AppColors.primaryGlow.withValues(alpha: 0.30),
+                      blurRadius: 60,
+                      spreadRadius: 12,
                     ),
                   ],
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.lock_outline_rounded,
-                    color: AppColors.textPrimary,
-                    size: 44,
-                    semanticLabel: 'Ikon Keamanan RAYA',
-                  ),
+                child: Image.asset(
+                  'assets/images/raya_logo.png',
+                  width: 220,
+                  height: 220,
+                  semanticLabel: 'Logo RAYA',
                 ),
-              ),
-              const SizedBox(height: AppSpacing.s24),
-              Text(
-                'RAYA',
-                style: AppTextStyles.displayLarge(color: AppColors.textPrimary),
               ),
               const SizedBox(height: AppSpacing.s8),
               Text(

@@ -145,7 +145,10 @@ class MockExploreRepository implements ExploreRepository {
   }
 
   @override
-  Future<void> deleteMyStatus() async {
+  Future<void> deleteMyStatus({String? statusId}) async {
+    if (statusId != null) {
+      _nearbyStatuses.removeWhere((s) => s.id == statusId);
+    }
     _myStatus = null;
   }
 

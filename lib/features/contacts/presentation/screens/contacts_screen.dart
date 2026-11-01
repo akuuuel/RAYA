@@ -217,6 +217,13 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen>
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Segarkan Kontak',
+            onPressed: () {
+              ref.read(contactsControllerProvider.notifier).loadContactsAndRequests();
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.person_add_rounded),
             tooltip: 'Tambah Kontak',
             onPressed: _showAddContactModal,
@@ -257,68 +264,84 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen>
         controller: _tabController,
         children: [
           // Tab 1: Daftar Semua Kontak
-          contacts.isEmpty
-              ? _buildEmptyContactsView()
-              : _buildContactsListView(contacts),
+          RefreshIndicator(
+            color: AppColors.primaryGlow,
+            backgroundColor: AppColors.surface,
+            onRefresh: () => ref.read(contactsControllerProvider.notifier).loadContactsAndRequests(),
+            child: contacts.isEmpty
+                ? _buildEmptyContactsView()
+                : _buildContactsListView(contacts),
+          ),
 
           // Tab 2: Permintaan Kontak Masuk
-          incomingRequests.isEmpty
-              ? _buildEmptyRequestsView()
-              : _buildRequestsListView(incomingRequests),
+          RefreshIndicator(
+            color: AppColors.primaryGlow,
+            backgroundColor: AppColors.surface,
+            onRefresh: () => ref.read(contactsControllerProvider.notifier).loadContactsAndRequests(),
+            child: incomingRequests.isEmpty
+                ? _buildEmptyRequestsView()
+                : _buildRequestsListView(incomingRequests),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildEmptyContactsView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.screenMarginHorizontal),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.surfaceBorder),
-              ),
-              child: const Icon(
-                Icons.people_outline_rounded,
-                size: 44,
-                color: AppColors.textMuted,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.s20),
-            Text(
-              'Belum Ada Kontak',
-              style: AppTextStyles.headlineMedium(color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: AppSpacing.s8),
-            Text(
-              'Tambah teman untuk mulai percakapan terenkripsi dan berbagi lokasi dua arah.',
-              style: AppTextStyles.bodyMedium(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.s24),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.textPrimary,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: AppSpacing.buttonBorderRadius,
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.screenMarginHorizontal),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.surfaceBorder),
+                  ),
+                  child: const Icon(
+                    Icons.people_outline_rounded,
+                    size: 44,
+                    color: AppColors.textMuted,
+                  ),
                 ),
-              ),
-              onPressed: _showAddContactModal,
-              icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
-              label: const Text('Tambah Kontak'),
+                const SizedBox(height: AppSpacing.s20),
+                Text(
+                  'Belum Ada Kontak',
+                  style: AppTextStyles.headlineMedium(color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: AppSpacing.s8),
+                Text(
+                  'Tambah teman untuk mulai percakapan terenkripsi dan berbagi lokasi dua arah.',
+                  style: AppTextStyles.bodyMedium(color: AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.s24),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.textPrimary,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: AppSpacing.buttonBorderRadius,
+                    ),
+                  ),
+                  onPressed: _showAddContactModal,
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
+                  label: const Text('Tambah Kontak'),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -466,40 +489,46 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen>
   }
 
   Widget _buildEmptyRequestsView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.screenMarginHorizontal),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.surfaceBorder),
-              ),
-              child: const Icon(
-                Icons.mark_email_read_outlined,
-                size: 44,
-                color: AppColors.textMuted,
-              ),
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(height: MediaQuery.of(context).size.height * 0.18),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.screenMarginHorizontal),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.surfaceBorder),
+                  ),
+                  child: const Icon(
+                    Icons.mark_email_read_outlined,
+                    size: 44,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.s20),
+                Text(
+                  'Tidak Ada Permintaan',
+                  style: AppTextStyles.headlineMedium(color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: AppSpacing.s8),
+                Text(
+                  'Permintaan pertemanan baru yang masuk akan muncul di sini.\nTarik layar ke bawah untuk menyegarkan.',
+                  style: AppTextStyles.bodyMedium(color: AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.s20),
-            Text(
-              'Tidak Ada Permintaan',
-              style: AppTextStyles.headlineMedium(color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: AppSpacing.s8),
-            Text(
-              'Permintaan pertemanan baru yang masuk akan muncul di sini.',
-              style: AppTextStyles.bodyMedium(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 

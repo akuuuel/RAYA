@@ -5,6 +5,7 @@ class UserProfile {
   final String? username;
   final String? displayName;
   final String? avatarUrl;
+  final String? bio;
   final DateTime? birthDate;
   final bool isAdult;
   final DateTime? createdAt;
@@ -16,6 +17,7 @@ class UserProfile {
     this.username,
     this.displayName,
     this.avatarUrl,
+    this.bio,
     this.birthDate,
     required this.isAdult,
     this.createdAt,
@@ -41,6 +43,7 @@ class UserProfile {
       username: json['username'] as String?,
       displayName: json['display_name'] as String?,
       avatarUrl: json['avatar_url'] as String?,
+      bio: json['bio'] as String?,
       birthDate: json['birth_date'] != null
           ? DateTime.tryParse(json['birth_date'] as String)
           : null,
@@ -61,6 +64,7 @@ class UserProfile {
       'username': username,
       'display_name': displayName,
       'avatar_url': avatarUrl,
+      'bio': bio,
       'birth_date': birthDate?.toIso8601String().split('T').first,
       'is_adult': isAdult,
     };
@@ -72,6 +76,7 @@ class UserProfile {
     String? username,
     String? displayName,
     String? avatarUrl,
+    String? bio,
     DateTime? birthDate,
     bool? isAdult,
     DateTime? createdAt,
@@ -83,6 +88,7 @@ class UserProfile {
       username: username ?? this.username,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      bio: bio ?? this.bio,
       birthDate: birthDate ?? this.birthDate,
       isAdult: isAdult ?? this.isAdult,
       createdAt: createdAt ?? this.createdAt,

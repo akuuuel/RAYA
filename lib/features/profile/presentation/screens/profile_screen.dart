@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +9,13 @@ import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../moderation/domain/entities/report_ticket.dart';
 import '../../../moderation/presentation/screens/notification_settings_screen.dart';
 import '../../../moderation/presentation/widgets/report_modal.dart';
+import '../widgets/active_tracking_modal.dart';
+import '../widgets/blocked_contacts_modal.dart';
+import '../widgets/chat_backup_modal.dart';
+import '../widgets/privacy_compliance_modal.dart';
+import '../widgets/security_key_modal.dart';
+import '../widgets/terms_and_privacy_modal.dart';
+import 'edit_profile_screen.dart';
 
 /// Layar Profil dan Pengaturan Resmi RAYA sesuai PRD v0.3 (FR-03, FR-04, FR-05, FR-45 s/d FR-48) & DESIGN.md 7.9.
 class ProfileScreen extends ConsumerWidget {
@@ -53,50 +61,98 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar Pengguna
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppColors.primaryGradient,
-                      border: Border.all(color: AppColors.primaryGlow, width: 1.5),
-                    ),
-                    child: Center(
+                  Row(
+                    children: [
+                      // Avatar Pengguna (Mendukung Foto Unggahan & Inisial Huruf)
+                      _buildProfileAvatar(user),
+                      const SizedBox(width: AppSpacing.s16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user?.displayName ?? 'Pengguna RAYA',
+                              style: AppTextStyles.titleMedium(color: AppColors.textPrimary)
+                                  .copyWith(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '@${user?.username ?? 'username'}',
+                              style: AppTextStyles.bodyMedium(color: const Color(0xFF00CEC9)),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              user?.email ?? '',
+                              style: AppTextStyles.labelSmall(color: AppColors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Tombol Atur / Edit Profil
+                      IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.primaryGlow.withValues(alpha: 0.5)),
+                          ),
+                          child: const Icon(Icons.edit_rounded, color: AppColors.primaryGlow, size: 18),
+                        ),
+                        tooltip: 'Atur Profil',
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const EditProfileScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  if (user?.bio != null && user!.bio!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF140F24),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.surfaceBorder),
+                      ),
                       child: Text(
-                        (user?.displayName?.isNotEmpty == true
-                                ? user!.displayName![0]
-                                : (user?.username?.isNotEmpty == true
-                                    ? user!.username![0]
-                                    : 'R'))
-                            .toUpperCase(),
-                        style: AppTextStyles.headlineMedium(color: AppColors.textPrimary),
+                        user.bio!,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          height: 1.35,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.s16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user?.displayName ?? 'Pengguna RAYA',
-                          style: AppTextStyles.titleMedium(color: AppColors.textPrimary)
-                              .copyWith(fontSize: 18),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '@${user?.username ?? 'username'}',
-                          style: AppTextStyles.bodyMedium(color: AppColors.primaryGlow),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          user?.email ?? '',
-                          style: AppTextStyles.labelSmall(color: AppColors.textMuted),
-                        ),
-                      ],
+                  ],
+                  const SizedBox(height: 12),
+                  // Tombol Pill "Atur Profil Lengkap"
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: AppColors.primaryGlow),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.tune_rounded, size: 16, color: AppColors.primaryGlow),
+                      label: const Text('Atur Profil (Bio, Foto, Nama)', style: TextStyle(fontSize: 13)),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const EditProfileScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -176,25 +232,25 @@ class ProfileScreen extends ConsumerWidget {
               icon: Icons.visibility_outlined,
               title: 'Siapa yang Sedang Memantau Saya (FR-27)',
               subtitle: 'Transparansi penuh sesi berbagi lokasi aktif',
-              onTap: () {},
+              onTap: () => ActiveTrackingModal.show(context),
             ),
             _buildSettingsTile(
               icon: Icons.enhanced_encryption_outlined,
               title: 'Verifikasi Kode Keamanan (FR-12)',
               subtitle: 'Pastikan enkripsi end-to-end tidak disusupi',
-              onTap: () {},
+              onTap: () => SecurityKeyModal.show(context),
             ),
             _buildSettingsTile(
               icon: Icons.backup_outlined,
               title: 'Cadangan Riwayat Chat (FR-19)',
               subtitle: 'Tersandi dengan kata sandi cadangan pribadi',
-              onTap: () {},
+              onTap: () => ChatBackupModal.show(context),
             ),
             _buildSettingsTile(
               icon: Icons.block_flipped,
               title: 'Daftar Kontak Diblokir (FR-08)',
               subtitle: 'Kelola kontak yang dibatasi',
-              onTap: () {},
+              onTap: () => BlockedContactsModal.show(context),
             ),
 
             const SizedBox(height: AppSpacing.s24),
@@ -222,13 +278,13 @@ class ProfileScreen extends ConsumerWidget {
               icon: Icons.privacy_tip_outlined,
               title: 'Kepatuhan Privasi (UU PDP No. 27/2022)',
               subtitle: 'Data minimum, tanpa pelacakan riwayat perjalanan',
-              onTap: () {},
+              onTap: () => PrivacyComplianceModal.show(context),
             ),
             _buildSettingsTile(
               icon: Icons.description_outlined,
               title: 'Ketentuan Layanan & Kebijakan Privasi',
               subtitle: 'Hak subjek data dan pemrosesan informasi',
-              onTap: () {},
+              onTap: () => TermsAndPrivacyModal.show(context),
             ),
 
             const SizedBox(height: AppSpacing.s24),
@@ -331,6 +387,49 @@ class ProfileScreen extends ConsumerWidget {
         ),
         trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
         onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildProfileAvatar(dynamic user) {
+    final avatarUrl = user?.avatarUrl as String?;
+
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      if (avatarUrl.startsWith('data:image')) {
+        try {
+          final base64Data = avatarUrl.split(',').last;
+          final bytes = base64Decode(base64Data);
+          return CircleAvatar(
+            radius: 32,
+            backgroundImage: MemoryImage(bytes),
+          );
+        } catch (_) {}
+      } else if (avatarUrl.startsWith('http')) {
+        return CircleAvatar(
+          radius: 32,
+          backgroundImage: NetworkImage(avatarUrl),
+        );
+      }
+    }
+
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: AppColors.primaryGradient,
+        border: Border.all(color: AppColors.primaryGlow, width: 1.5),
+      ),
+      child: Center(
+        child: Text(
+          (user?.displayName?.isNotEmpty == true
+                  ? user!.displayName![0]
+                  : (user?.username?.isNotEmpty == true
+                      ? user!.username![0]
+                      : 'R'))
+              .toUpperCase(),
+          style: AppTextStyles.headlineMedium(color: AppColors.textPrimary),
+        ),
       ),
     );
   }

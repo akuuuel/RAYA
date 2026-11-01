@@ -38,17 +38,48 @@ dependencies:
   google_fonts: ^8.2.1
   supabase_flutter: ^2.18.3
   intl: ^0.20.3
+  shared_preferences: ^2.3.2
+  image_picker: ^1.1.2
+  file_picker: ^8.1.2
+  record: ^5.1.2
+  audioplayers: ^6.1.0
+  path_provider: ^2.1.4
+  flutter_local_notifications: ^17.2.3
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  geolocator: ^13.0.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.1
+
+dependency_overrides:
+  record_platform_interface: 1.5.0
+
+# Konfigurasi ikon launcher RAYA
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/raya_logo.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#0D0820"
+  adaptive_icon_foreground: "assets/images/raya_logo.png"
+  web:
+    generate: false
+  windows:
+    generate: false
+
+# Konfigurasi splash screen RAYA
+flutter_native_splash:
+  color: "#0D0820"
+  image: assets/images/raya_logo.png
+  android: true
+  ios: true
+  fullscreen: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -61,10 +92,9 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # Asset aplikasi RAYA
+  assets:
+    - assets/images/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

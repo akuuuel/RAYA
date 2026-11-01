@@ -30,7 +30,7 @@ abstract class ExploreRepository {
   });
 
   /// Menghapus status publik milik sendiri (FR-33)
-  Future<void> deleteMyStatus();
+  Future<void> deleteMyStatus({String? statusId});
 
   /// Mengambil komentar pada status (hanya untuk kontak terhubung, FR-35)
   Future<List<StatusComment>> getComments(String statusId);

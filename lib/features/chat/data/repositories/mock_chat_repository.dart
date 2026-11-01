@@ -120,6 +120,7 @@ class MockChatRepository implements ChatRepository {
     required String recipientId,
     required String text,
     required String recipientPublicKey,
+    MessageType messageType = MessageType.text,
   }) async {
     // 1. Enkripsi plaintext di perangkat klien (FR-10)
     final encrypted = CryptoService.encrypt(
@@ -137,7 +138,7 @@ class MockChatRepository implements ChatRepository {
       content: text,
       ciphertext: encrypted['ciphertext']!,
       nonce: encrypted['nonce']!,
-      messageType: MessageType.text,
+      messageType: messageType,
       status: MessageStatus.sent,
       createdAt: now,
       isOutgoing: true,
@@ -158,6 +159,9 @@ class MockChatRepository implements ChatRepository {
 
     return message;
   }
+
+  @override
+  Future<void> markMessagesAsDelivered(String conversationId) async {}
 
   @override
   Future<void> markMessagesAsRead(String conversationId) async {

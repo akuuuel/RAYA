@@ -23,12 +23,17 @@ abstract class ChatRepository {
   Future<List<Message>> getMessages(String conversationId, String peerPublicKey);
 
   /// Mengenkripsi pesan di perangkat dan mengirim ciphertext ke server (FR-10, FR-11, FR-13)
+  /// Mendukung tipe teks, gambar, dan pesan suara.
   Future<Message> sendMessage({
     required String conversationId,
     required String recipientId,
     required String text,
     required String recipientPublicKey,
+    MessageType messageType = MessageType.text,
   });
+
+  /// Menandai pesan sebagai terkirim/diterima (delivered) saat lawan membuka chat
+  Future<void> markMessagesAsDelivered(String conversationId);
 
   /// Menandai pesan sebagai terbaca (FR-16)
   Future<void> markMessagesAsRead(String conversationId);

@@ -15,6 +15,7 @@ class MockAuthRepository implements AuthRepository {
 
   UserProfile? _currentUserProfile;
   bool _isLoggedIn = false;
+  final Set<String> _registeredUsers = {'user@raya.id', 'test@example.com'};
 
   /// Default mock OTP untuk mempermudah testing lokal
   static const String testOtp = '123456';
@@ -23,10 +24,49 @@ class MockAuthRepository implements AuthRepository {
   Stream<bool> authStateChanges() => _authStateController.stream;
 
   @override
-  Future<void> requestEmailOtp(String email) async {
+  Future<AuthResult> signInWithPassword({
+    required String email,
+    required String password,
+  }) async {
+    final sanitizedEmail = email.trim().toLowerCase();
+    if (!_registeredUsers.contains(sanitizedEmail)) {
+      throw Exception('Akun belum terdaftar. Silakan pilih Daftar Akun Baru.');
+    }
+    _isLoggedIn = true;
+    _authStateController.add(true);
+    return AuthResult(
+      userId: _currentUserProfile?.id ?? 'mock-user-uuid-1',
+      email: sanitizedEmail,
+      isNewUser: _currentUserProfile == null,
+      isAdult: _currentUserProfile?.isAdult ?? false,
+    );
+  }
+
+  @override
+  Future<void> signUpWithPassword({
+    required String email,
+    required String password,
+  }) async {
+    final sanitizedEmail = email.trim().toLowerCase();
+    if (_registeredUsers.contains(sanitizedEmail)) {
+      throw Exception('Email ini sudah terdaftar. Silakan pilih tombol Masuk.');
+    }
+    _registeredUsers.add(sanitizedEmail);
+    _pendingEmail = sanitizedEmail;
+    _currentOtp = testOtp;
+    _otpExpiresAt = DateTime.now().add(const Duration(minutes: 10));
+    _attempts = 0;
+  }
+
+  @override
+  Future<void> requestEmailOtp(String email, {bool shouldCreateUser = true}) async {
     final sanitizedEmail = email.trim().toLowerCase();
     if (!sanitizedEmail.contains('@') || !sanitizedEmail.contains('.')) {
       throw Exception('Format alamat email tidak valid.');
+    }
+
+    if (!shouldCreateUser && !_registeredUsers.contains(sanitizedEmail)) {
+      throw Exception('Akun belum terdaftar. Silakan pilih Daftar Akun Baru.');
     }
 
     _pendingEmail = sanitizedEmail;
@@ -111,6 +151,26 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<UserProfile> updateProfile({
+    String? displayName,
+    String? username,
+    String? bio,
+    String? avatarUrl,
+  }) async {
+    if (_currentUserProfile == null) {
+      throw Exception('Sesi pengguna tidak aktif.');
+    }
+    _currentUserProfile = _currentUserProfile!.copyWith(
+      displayName: displayName ?? _currentUserProfile!.displayName,
+      username: username ?? _currentUserProfile!.username,
+      bio: bio ?? _currentUserProfile!.bio,
+      avatarUrl: avatarUrl ?? _currentUserProfile!.avatarUrl,
+      updatedAt: DateTime.now(),
+    );
+    return _currentUserProfile!;
+  }
+
+  @override
   Future<UserProfile?> getCurrentProfile() async {
     return _currentUserProfile;
   }
@@ -121,7 +181,6 @@ class MockAuthRepository implements AuthRepository {
     _isLoggedIn = false;
     _pendingEmail = null;
     _currentOtp = null;
-    _attempts = 0;
     _authStateController.add(false);
   }
 
@@ -129,11 +188,5 @@ class MockAuthRepository implements AuthRepository {
   Future<void> signOut() async {
     _isLoggedIn = false;
     _authStateController.add(false);
-  }
-
-  bool get isLoggedIn => _isLoggedIn;
-
-  void dispose() {
-    _authStateController.close();
   }
 }

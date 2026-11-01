@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/services/location_service.dart';
 import '../../data/repositories/mock_explore_repository.dart';
 import '../../data/repositories/supabase_explore_repository.dart';
 import '../../domain/entities/public_status.dart';
@@ -17,6 +18,9 @@ class ExploreState {
   final bool isLoading;
   final bool isPublicVisible;
   final int selectedRadiusKm;
+  final double userLatitude;
+  final double userLongitude;
+  final bool hasRealLocation;
   final PublicStatus? myStatus;
   final List<PublicStatus> nearbyStatuses;
   final Map<String, List<StatusComment>> comments;
@@ -27,6 +31,9 @@ class ExploreState {
     this.isLoading = false,
     this.isPublicVisible = false,
     this.selectedRadiusKm = 5,
+    this.userLatitude = LocationService.defaultLatitude,
+    this.userLongitude = LocationService.defaultLongitude,
+    this.hasRealLocation = false,
     this.myStatus,
     this.nearbyStatuses = const [],
     this.comments = const {},
@@ -38,6 +45,9 @@ class ExploreState {
     bool? isLoading,
     bool? isPublicVisible,
     int? selectedRadiusKm,
+    double? userLatitude,
+    double? userLongitude,
+    bool? hasRealLocation,
     PublicStatus? myStatus,
     bool clearMyStatus = false,
     List<PublicStatus>? nearbyStatuses,
@@ -49,6 +59,9 @@ class ExploreState {
       isLoading: isLoading ?? this.isLoading,
       isPublicVisible: isPublicVisible ?? this.isPublicVisible,
       selectedRadiusKm: selectedRadiusKm ?? this.selectedRadiusKm,
+      userLatitude: userLatitude ?? this.userLatitude,
+      userLongitude: userLongitude ?? this.userLongitude,
+      hasRealLocation: hasRealLocation ?? this.hasRealLocation,
       myStatus: clearMyStatus ? null : (myStatus ?? this.myStatus),
       nearbyStatuses: nearbyStatuses ?? this.nearbyStatuses,
       comments: comments ?? this.comments,
@@ -62,24 +75,57 @@ class ExploreController extends StateNotifier<ExploreState> {
   final ExploreRepository _repository;
 
   ExploreController(this._repository) : super(const ExploreState()) {
-    loadExploreData();
+    initExploreWithLocation();
+  }
+
+  /// Inisialisasi: minta izin lokasi GPS dan ambil titik koordinat fisik asli perangkat
+  Future<void> initExploreWithLocation() async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    double lat = state.userLatitude;
+    double lng = state.userLongitude;
+    bool gotRealLoc = false;
+
+    try {
+      final pos = await LocationService.instance.getCurrentPosition();
+      if (pos != null) {
+        lat = pos.latitude;
+        lng = pos.longitude;
+        gotRealLoc = true;
+      }
+    } catch (_) {}
+
+    state = state.copyWith(
+      userLatitude: lat,
+      userLongitude: lng,
+      hasRealLocation: gotRealLoc,
+    );
+
+    await loadExploreData();
   }
 
   Future<void> loadExploreData() async {
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     try {
+      // Perbarui koordinat jika GPS sudah siap
+      final pos = LocationService.instance.lastKnownPosition;
+      double lat = pos?.latitude ?? state.userLatitude;
+      double lng = pos?.longitude ?? state.userLongitude;
+
       final isVisible = await _repository.getPublicVisibility();
       final myStatus = await _repository.getMyActiveStatus();
       final nearby = await _repository.getNearbyStatuses(
-        latitude: -6.175392,
-        longitude: 106.827153,
+        latitude: lat,
+        longitude: lng,
         radiusKm: state.selectedRadiusKm,
       );
 
       state = state.copyWith(
         isLoading: false,
         isPublicVisible: isVisible,
+        userLatitude: lat,
+        userLongitude: lng,
         myStatus: myStatus,
         clearMyStatus: myStatus == null,
         nearbyStatuses: nearby,
@@ -119,42 +165,61 @@ class ExploreController extends StateNotifier<ExploreState> {
     String? note,
     String? imageUrl,
   }) async {
+    // Pastikan state loading untuk feedback UI
+    state = state.copyWith(isLoading: false, errorMessage: null, successMessage: null);
+
     try {
+      // Gunakan lokasi fisik asli perangkat (atau fallback jika GPS belum tersedia)
+      final pos = await LocationService.instance.getCurrentPosition();
+      final lat = pos?.latitude ?? state.userLatitude;
+      final lng = pos?.longitude ?? state.userLongitude;
+
       final newStatus = await _repository.postStatus(
         text: text,
         note: note,
         imageUrl: imageUrl,
-        latitude: -6.175392, // Posisi simulasi pengguna
-        longitude: 106.827153,
+        latitude: lat,
+        longitude: lng,
       );
 
       state = state.copyWith(
         myStatus: newStatus,
+        userLatitude: lat,
+        userLongitude: lng,
         isPublicVisible: true,
-        successMessage: 'Status publik berhasil dipasang selama 8 jam (FR-32).',
+        successMessage: 'Catatan publik berhasil dipasang selama 8 jam (FR-32).',
       );
+      // Muat ulang data agar pin muncul di peta
       await loadExploreData();
       return true;
     } catch (e) {
-      state = state.copyWith(
-        errorMessage: e.toString().replaceFirst('Exception: ', ''),
-      );
+      final errMsg = e.toString().replaceFirst('Exception: ', '');
+      state = state.copyWith(errorMessage: errMsg);
       return false;
     }
   }
 
-  Future<void> deleteMyStatus() async {
+  Future<void> deleteMyStatus({String? statusId}) async {
     try {
-      await _repository.deleteMyStatus();
+      await _repository.deleteMyStatus(statusId: statusId);
+
+      // Hapus seketika dari state lokal agar tidak ada delay UI
+      final updatedNearby = state.nearbyStatuses
+          .where((s) => statusId != null ? s.id != statusId : !s.isMine)
+          .toList();
+
       state = state.copyWith(
         clearMyStatus: true,
-        successMessage: 'Status publik telah dihapus (FR-33).',
+        nearbyStatuses: updatedNearby,
+        successMessage: 'Catatan publik telah dihapus (FR-33).',
       );
+      // Muat ulang agar konsisten dengan database
       await loadExploreData();
     } catch (e) {
-      state = state.copyWith(
-        errorMessage: e.toString().replaceFirst('Exception: ', ''),
-      );
+      final errMsg = e.toString().replaceFirst('Exception: ', '');
+      state = state.copyWith(errorMessage: errMsg);
+      // Re-throw agar UI dapat menampilkan error spesifik
+      rethrow;
     }
   }
 
@@ -188,7 +253,7 @@ class ExploreController extends StateNotifier<ExploreState> {
 
       state = state.copyWith(
         comments: newMap,
-        successMessage: 'Komentar terkirim ke pemilik status (FR-35).',
+        successMessage: 'Komentar terkirim ke pemilik catatan (FR-35).',
       );
     } catch (e) {
       state = state.copyWith(

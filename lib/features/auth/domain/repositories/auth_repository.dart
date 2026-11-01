@@ -1,6 +1,6 @@
 import '../entities/user_profile.dart';
 
-/// Hasil verifikasi autentikasi OTP (FR-01, FR-02)
+/// Hasil verifikasi autentikasi OTP atau Kata Sandi (FR-01, FR-02)
 class AuthResult {
   final String userId;
   final String email;
@@ -17,10 +17,22 @@ class AuthResult {
 
 /// Kontrak Repository Autentikasi dan Profil Pengguna sesuai FR-01 sampai FR-05.
 abstract class AuthRepository {
-  /// Mengirim kode OTP 6 digit ke alamat email (FR-01, FR-02)
-  Future<void> requestEmailOtp(String email);
+  /// Masuk langsung menggunakan email dan kata sandi (Instan tanpa perlu menunggu OTP)
+  Future<AuthResult> signInWithPassword({
+    required String email,
+    required String password,
+  });
 
-  /// Memverifikasi kode OTP 6 digit yang dimasukkan pengguna (FR-01, FR-02)
+  /// Mendaftar akun baru dengan email dan kata sandi
+  Future<void> signUpWithPassword({
+    required String email,
+    required String password,
+  });
+
+  /// Mengirim kode OTP ke alamat email (FR-01, FR-02)
+  Future<void> requestEmailOtp(String email, {bool shouldCreateUser = true});
+
+  /// Memverifikasi kode OTP yang dimasukkan pengguna (FR-01, FR-02)
   Future<AuthResult> verifyEmailOtp({
     required String email,
     required String otp,
@@ -31,6 +43,14 @@ abstract class AuthRepository {
     required String username,
     required String displayName,
     required DateTime birthDate,
+    String? avatarUrl,
+  });
+
+  /// Mengubah profil pengguna (Nama, Username, Bio, Foto Profil)
+  Future<UserProfile> updateProfile({
+    String? displayName,
+    String? username,
+    String? bio,
     String? avatarUrl,
   });
 
